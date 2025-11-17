@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.v1 import routes_files
+from app.api.v1 import routes_files, auth
 from fastapi.responses import JSONResponse
 
 app = FastAPI(title="FINSURE - Financial Insights API")
@@ -10,6 +10,7 @@ app.include_router(
     prefix="/api/v1/files",           # base URL
     tags=["File Uploads"]             # optional, Swagger docs ke liye
 )
+app.include_router(auth.router)
 
 @app.get("/", tags=["Root"])
 def root():
