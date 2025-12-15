@@ -1,7 +1,6 @@
 
 __pycache__/
-
-
+uploads/
 venv/
 .env
 .env.local
