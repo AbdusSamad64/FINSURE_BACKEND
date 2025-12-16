@@ -1,13 +1,17 @@
-from fastapi import APIRouter, UploadFile, File,Form
+from fastapi import APIRouter, UploadFile, File,Form, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from app.utils.file_helpers import detect_file_type,save_temp_file,delete_temp_file
 from app.services.extract_text import extract_pdf_with_ocr
 from app.services.extract_transactions import extract_transaction_of_easypaisa,extract_transaction_of_meezan
+from app.utils.jwt_util import get_current_user
+from app.models.accounts_models import NewAccount
+from .auth import connect_to_db
 router=APIRouter()
 
 @router.post("/upload")
 async def upload_file(file:UploadFile = File(...),
-                      password: str | None = Form(None)
+                      password: str | None = Form(None),
+                      file_type: str = Form(...)
                       ): 
     # print(file.filename)       
     # print(file.content_type) 
@@ -62,6 +66,7 @@ async def upload_file(file:UploadFile = File(...),
                 }
             )
 
+        print(complete_transactions)
         return complete_transactions,account_number
 
     
@@ -72,3 +77,67 @@ async def upload_file(file:UploadFile = File(...),
             raw_file_path=f'output{i}.txt'
             delete_temp_file(raw_file_path) 
         await file.close()       
+
+
+# add account
+@router.post('/new_account')
+def new_acc(
+    new_acc: NewAccount,
+    curr_user: dict = Depends(get_current_user),
+    conn = Depends(connect_to_db)
+):
+    with conn.cursor() as cursor:
+
+        # get bankID from banks table
+        cursor.execute(
+            'SELECT "bankID" FROM banks WHERE name = %s;',
+            (new_acc.bank,)
+        )
+        bank = cursor.fetchone()
+
+        if not bank:
+            raise HTTPException(
+                status_code=404,
+                detail="Bank not found"
+            )
+
+        bank_id = bank["bankID"]
+
+        #check if account already exists (same bank + account number)
+        cursor.execute(
+            """
+            SELECT 1
+            FROM accounts
+            WHERE "bankID" = %s AND "accountNo" = %s;
+            """,
+            (bank_id, new_acc.acc_no)
+        )
+        existing_account = cursor.fetchone()
+
+        if existing_account:
+            raise HTTPException(
+                status_code=409,
+                detail="Account already exists"
+            )
+
+        # insert new account
+        cursor.execute(
+            """
+            INSERT INTO accounts ("userID", "bankID", "accountNo")
+            VALUES (%s, %s, %s)
+            RETURNING "accID", "accountNo";
+            """,
+            (curr_user["userID"], bank_id, new_acc.acc_no)
+        )
+
+        account = cursor.fetchone()
+        conn.commit()
+
+        return {
+            "message": "Account added successfully",
+            "account": {
+                "accID": account["accID"],
+                "bank": new_acc.bank,
+                "accountNo": account["accountNo"]
+            }
+        }
