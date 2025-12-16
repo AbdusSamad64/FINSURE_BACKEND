@@ -1,5 +1,5 @@
 from app.utils.extraction_helpers import clean_brackets,is_number,is_int_convertible
-def extract_transaction_of_easypaisa(filepath,page_no,total_no_pages):
+def extract_transaction_of_easypaisa(filepath,page_no,total_no_pages, extract_account=False):
     if total_no_pages==0:
         return "No pages to extract transactions"
     if total_no_pages==1:
@@ -17,6 +17,9 @@ def extract_transaction_of_easypaisa(filepath,page_no,total_no_pages):
 
     with open(filepath,"r") as file:
         lines = [line.strip() for line in file if line.strip()]  # remove empty lines
+    account_number = None
+    if extract_account:
+        account_number = lines[5]   # extract only once    
     lines = lines[skip_lines_from_start:len(lines)-skip_lines_from_end]
     
     transactions=[]
@@ -86,23 +89,30 @@ def extract_transaction_of_easypaisa(filepath,page_no,total_no_pages):
         dict['transaction_id'] = clean_brackets(block[18])
         transactions.append(dict)
         dict={}
-    return transactions
+    return transactions,account_number
 
-def extract_transaction_of_meezan(filepath,page_no,total_no_pages):
+def extract_transaction_of_meezan(filepath,page_no,total_no_pages,extract_account=False):
     if total_no_pages==0 or total_no_pages==1:
         return "No pages to extract transactions"
     else:
         skip_lines_from_start=29
         skip_lines_from_end=12
-
+    account_number = None
+    
     with open(filepath,"r") as file:
         lines = [line.strip() for line in file if line.strip()]  # remove empty lines
    
     if (is_int_convertible(lines[8])==True and lines[7]!='MEEZAN KAFALAH ACCOUNT'):
+        if extract_account:
+            account_number = lines[8]
         lines = lines[skip_lines_from_start:len(lines)-skip_lines_from_end]
     elif lines[7]=='MEEZAN KAFALAH ACCOUNT':
+        if extract_account:
+            account_number = lines[8]
         lines = lines[skip_lines_from_start-1:len(lines)-skip_lines_from_end]   
     else:
+        if extract_account:
+            account_number = lines[9]   # extract only once 
         lines = lines[skip_lines_from_start+1:len(lines)-skip_lines_from_end]   
 
     
@@ -171,11 +181,11 @@ def extract_transaction_of_meezan(filepath,page_no,total_no_pages):
         dict['incoming'] = clean_brackets(block[5])
         transactions.append(dict)
         dict={}   
-    return transactions
+    return transactions,account_number
 
 
 
 
 # print(extract_transaction_of_easypaisa("output8.txt",8,12))
-# print(extract_transaction_of_easypaisa("output4.txt",4,4))
+# print(extract_transaction_of_easypaisa("output1.txt",1,4))
 # print(extract_transaction_of_meezan("output2.txt",2,2))

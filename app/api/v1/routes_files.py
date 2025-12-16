@@ -14,6 +14,7 @@ async def upload_file(file:UploadFile = File(...),
     complete_transactions=[]
     file_path=None
     total_no_pages=0
+    account_number=None
     try:
         file_type=detect_file_type(file.content_type)
         file_type["filename"]=file.filename
@@ -39,13 +40,17 @@ async def upload_file(file:UploadFile = File(...),
         if "easypaisa" in text:
             for i in range(1,total_no_pages+1):
                 raw_file_path=f'output{i}.txt'
-                transactions=extract_transaction_of_easypaisa(filepath=raw_file_path,page_no=i,total_no_pages=total_no_pages)
+                transactions,acc_no=extract_transaction_of_easypaisa(filepath=raw_file_path,page_no=i,total_no_pages=total_no_pages,extract_account=(i == 1))
+                if acc_no:
+                    account_number = acc_no
                 complete_transactions+=transactions
         elif "MEEZAN" in text:   #first format of meezan bank statement , First page is not necessary so exclude.
             print("meezan bank detected")
             for i in range(2,total_no_pages+1):
                 raw_file_path=f'output{i}.txt'
-                transactions=extract_transaction_of_meezan(filepath=raw_file_path,page_no=i,total_no_pages=total_no_pages)
+                transactions,acc_no=extract_transaction_of_meezan(filepath=raw_file_path,page_no=i,total_no_pages=total_no_pages,extract_account=(i == 2))
+                if acc_no:
+                    account_number = acc_no
                 complete_transactions+=transactions  
         # print(complete_transactions)
         else:
@@ -57,7 +62,7 @@ async def upload_file(file:UploadFile = File(...),
                 }
             )
 
-        return complete_transactions
+        return complete_transactions,account_number
 
     
     finally:
