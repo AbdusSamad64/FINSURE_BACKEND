@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.v1 import routes_files, auth
+from app.api.v1 import data_retrieval, routes_files, auth
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,6 +20,8 @@ app.include_router(
     tags=["File Uploads"]             # optional, Swagger docs ke liye
 )
 app.include_router(auth.router)
+
+app.include_router(data_retrieval.router)
 
 @app.get("/", tags=["Root"])
 def root():
