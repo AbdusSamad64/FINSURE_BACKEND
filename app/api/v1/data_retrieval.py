@@ -85,3 +85,37 @@ def get_dashboard_overview(
         "netProfit": netProfit,
         "taxableIncome": 0  
     }}  
+
+# get user raw transaction data
+
+@router.get('/my-transaction-history')
+def get_transactions_history(
+    curr_user: dict = Depends(get_current_user),
+    conn = Depends(connect_to_db)
+):
+    with conn.cursor() as cursor:
+        # fetch required columns for current user
+        cursor.execute(
+            """
+            SELECT date, amount, "trxType", "trxDetail"
+            FROM transactions
+            WHERE "userID" = %s
+            ORDER BY date DESC;
+            """,
+            (curr_user["userID"],)
+        )
+        
+        files = cursor.fetchall()  # fetch all matching rows
+
+        # optionally, convert to list of dicts
+        result = []
+        for f in files:
+            result.append({
+                "date": f["date"],
+                "amount": f["amount"],
+                "category": f["trxType"],
+                "description": f["trxDetail"],
+                "taxable": 'false',
+            })
+
+        return {"transactions": result}    
