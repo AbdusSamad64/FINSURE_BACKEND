@@ -52,16 +52,10 @@ def generate_report(
 
             # date validation 
             if payload.startDate < first_trx_date:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Start date cannot be earlier than first transaction date ({first_trx_date})"
-                )
+                payload.startDate = first_trx_date
 
             if payload.endDate > last_trx_date:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"End date cannot be later than last transaction date ({last_trx_date})"
-                )
+                payload.endDate = last_trx_date
 
             # insert report 
             generated_on = datetime.utcnow().date()
