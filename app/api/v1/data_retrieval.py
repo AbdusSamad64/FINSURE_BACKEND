@@ -39,3 +39,49 @@ def get_upload_history(
             })
 
         return {"history": result}
+
+
+
+# get dashboard overview endpoint
+
+@router.get('/my-dashboard-overview')
+def get_dashboard_overview(
+    curr_user: dict = Depends(get_current_user),
+    conn = Depends(connect_to_db)
+):
+    with conn.cursor() as cursor:
+        # fetch required columns for current user
+        cursor.execute(
+            """
+            SELECT amount
+            FROM transactions
+            WHERE "userID" = %s AND "trxType" = 'credit';
+            """,
+            (curr_user["userID"],)
+        )
+        
+        incoming = cursor.fetchall()  # fetch all matching rows
+
+        cursor.execute(
+            """
+            SELECT amount
+            FROM transactions
+            WHERE "userID" = %s AND "trxType" = 'debit';
+            """,
+            (curr_user["userID"],)
+        )
+        
+        outgoing = cursor.fetchall()  # fetch all matching rows
+
+  
+    totalIncome = sum([inc["amount"] for inc in incoming])
+    totalExpenses = sum([out["amount"] for out in outgoing])
+    netProfit = totalIncome - totalExpenses
+        
+
+    return {"dashboardSummary": {
+        "totalIncome": totalIncome,
+        "totalExpenses": totalExpenses,
+        "netProfit": netProfit,
+        "taxableIncome": 0  
+    }}  
