@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.v1 import data_retrieval, routes_files, auth
+from app.api.v1 import data_retrieval, routes_files, auth, reports_manager
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -22,6 +22,9 @@ app.include_router(
 app.include_router(auth.router)
 
 app.include_router(data_retrieval.router)
+
+app.include_router(reports_manager.router)
+
 
 @app.get("/", tags=["Root"])
 def root():
