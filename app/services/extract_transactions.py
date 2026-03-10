@@ -1,4 +1,4 @@
-from app.utils.extraction_helpers import clean_brackets,is_number,is_int_convertible
+from app.utils.extraction_helpers import clean_brackets,is_number,is_int_convertible,is_date,is_amount,clean_amount
 def extract_transaction_of_easypaisa(filepath,page_no,total_no_pages, extract_account=False):
     if total_no_pages==0:
         return "No pages to extract transactions"
@@ -27,8 +27,7 @@ def extract_transaction_of_easypaisa(filepath,page_no,total_no_pages, extract_ac
 
      # Split lines into initial blocks
     blocks = [lines[i:i + block_size] for i in range(0, len(lines), block_size)]
-    # print(blocks)
-    # changing by abdullah
+
     changed = True
     while changed:
         changed = False
@@ -72,9 +71,7 @@ def extract_transaction_of_easypaisa(filepath,page_no,total_no_pages, extract_ac
             #till            
 
             i += 1
-
-
-    
+   
     for block in blocks:
         if len(block) < block_size:
             continue
@@ -102,7 +99,7 @@ def extract_transaction_of_meezan(filepath,page_no,total_no_pages,extract_accoun
     with open(filepath,"r") as file:
         lines = [line.strip() for line in file if line.strip()]  # remove empty lines
    
-    if (is_int_convertible(lines[8])==True and lines[7]!='MEEZAN KAFALAH ACCOUNT'):
+    if (is_int_convertible(lines[8])==True and lines[7]!='MEEZAN KAFALAH ACCOUNT'):  #asaan account statement
         if extract_account:
             account_number = lines[8]
         lines = lines[skip_lines_from_start:len(lines)-skip_lines_from_end]
@@ -110,7 +107,7 @@ def extract_transaction_of_meezan(filepath,page_no,total_no_pages,extract_accoun
         if extract_account:
             account_number = lines[8]
         lines = lines[skip_lines_from_start-1:len(lines)-skip_lines_from_end]   
-    else:
+    else:                                                                             # saving account statement
         if extract_account:
             account_number = lines[9]   # extract only once 
         lines = lines[skip_lines_from_start+1:len(lines)-skip_lines_from_end]   
@@ -121,6 +118,7 @@ def extract_transaction_of_meezan(filepath,page_no,total_no_pages,extract_accoun
 
     #  # Split lines into initial blocks
     blocks = [lines[i:i + block_size] for i in range(0, len(lines), block_size)]
+    # print(blocks)
     changed = True
     while changed:
         changed = False
@@ -168,7 +166,7 @@ def extract_transaction_of_meezan(filepath,page_no,total_no_pages,extract_accoun
             i += 1
 
 
-    
+    print(blocks)
     for block in blocks:
         if len(block) < block_size:
             continue
@@ -184,8 +182,243 @@ def extract_transaction_of_meezan(filepath,page_no,total_no_pages,extract_accoun
     return transactions,account_number
 
 
+def extract_transaction_of_ubl(filepath,page_no,total_no_pages,extract_account=False,previous_balance=None):
+    if total_no_pages==0:
+        return "No pages to extract transactions"
+   
+    account_number = None
+    
+    with open(filepath,"r") as file:
+        lines = [line.strip() for line in file if line.strip()]  # remove empty lines
+        start_index = 0
+
+        for i, line in enumerate(lines):
+            if "** OPENING BALANCE **" in line:
+                start_index = i
+                break
+        if extract_account:
+            for i, line in enumerate(lines):
+                if "Account Number:" in line:
+                    account_number=lines[i+1]
+                    break
+        if previous_balance is not None:
+            current_balance = previous_balance
+        else:
+            current_balance = lines[start_index+1]        
+    if total_no_pages==1:
+        skip_lines_from_start=start_index+2  #unwanted header
+        skip_lines_from_end=11              #unwanted footer      
+    elif page_no==1:
+        skip_lines_from_start=start_index+2
+        skip_lines_from_end=2
+    elif page_no==total_no_pages:
+        skip_lines_from_start=9
+        skip_lines_from_end=11
+    else:
+        skip_lines_from_start=9
+        skip_lines_from_end=2   
+    lines = lines[skip_lines_from_start:len(lines)-skip_lines_from_end]
+  
+    transactions=[]
+    block_size = 4    #pattern of 6 lines are repeating
+
+    #  # Split lines into initial blocks
+    blocks = [lines[i:i + block_size] for i in range(0, len(lines), block_size)]
+    for i in range(len(blocks)):
+        blocks[i] = [item for item in blocks[i] if not item.strip().isdigit()]
+
+    changed = True
+    while changed:
+        changed = False
+        i = 0
+        
+        while i < len(blocks):
+            #added by 10/11
+            # while True:
+            inner_count=0
+            while inner_count<10:
+                inner_count+=1    
+                block = blocks[i]
+                #added for block protection
+                if len(block)<4:
+                    if i + 1 < len(blocks):
+                        next_block=blocks[i+1]
+                        elements_req=4-len(block)
+                        for j in range(elements_req):
+                            block.append(next_block.pop(0))  
+                        # if next block becomes empty, remove it
+                        if len(next_block) == 0:
+                            blocks.pop(i + 1)    
+                #till here  
+                if is_number(block[2]) and len(block)==4:
+                    break  # if first element is numeric
+                if  not is_number(block[2]): # if not numeric 
+                    changed = True
+                    # merge block[1] and block[2]
+                    block[1] = f"{block[1]} {block[2]}".strip()                 
+                    block.pop(2)
+            
+
+                    # if next block exists, move its 0th element here
+                    if i + 1 < len(blocks):
+                        next_block = blocks[i + 1]
+                        if next_block:
+                            elements_req=4-len(block)
+                            for j in range(elements_req):
+                                block.append(next_block.pop(0))
+
+                            # if next block becomes empty, remove it
+                            if len(next_block) == 0:
+                                blocks.pop(i + 1) 
+
+            i += 1
+
+    for block in blocks:
+        if len(block) < block_size:
+            continue
+        balance= clean_brackets(block[3])
+        dict={} 
+        dict['date'] = clean_brackets(block[0])
+        dict['description'] = block[1]
+        if balance<current_balance:
+            dict['outgoing'] = clean_brackets(block[2])
+            dict['incoming'] = '-'
+        else:
+            dict['outgoing'] = '-'
+            dict['incoming'] = clean_brackets(block[2])
+        dict['balance'] = balance
+         
+        transactions.append(dict)
+        current_balance=balance
+        dict={}   
+    return transactions,account_number,current_balance
+
+
 
 
 # print(extract_transaction_of_easypaisa("output8.txt",8,12))
 # print(extract_transaction_of_easypaisa("output1.txt",1,4))
-# print(extract_transaction_of_meezan("output2.txt",2,2))
+# print(extract_transaction_of_meezan("output2.txt",2,3))
+# print(extract_transaction_of_ubl("output1.txt",1,1))
+
+
+def extract_transaction_of_alfalah(filepath,page_no,total_no_pages,extract_account=False,previous_balance=None):
+    if total_no_pages==0:
+        return "No pages to extract transactions"
+   
+    account_number = None
+    
+    with open(filepath,"r") as file:
+        lines = [line.strip() for line in file if line.strip()]  # remove empty lines
+        start_index = 0
+
+        for i, line in enumerate(lines):
+            if "Opening Balance" in line:
+                start_index = i
+                break
+        if extract_account:
+            for i, line in enumerate(lines):
+                if "Account #" in line:
+                    account_number=lines[i+1].replace(" ", "").replace("-", "")
+                    break
+        if previous_balance is not None:
+            current_balance = previous_balance
+        else:
+            current_balance = clean_amount(lines[start_index+1])
+    
+        if total_no_pages==1:
+            skip_lines_from_start=start_index+1  #unwanted header
+            skip_lines_from_end=7                #unwanted footer      
+        elif page_no==1:
+            skip_lines_from_start=start_index+1
+            skip_lines_from_end=0
+        elif page_no==total_no_pages:
+            skip_lines_from_start=12
+            skip_lines_from_end=7
+        else:
+            skip_lines_from_start=12
+            skip_lines_from_end=0   
+        lines = lines[skip_lines_from_start:len(lines)-skip_lines_from_end]    
+    
+    transactions = []
+    i = 0
+    
+    while i < len(lines):
+
+        line = lines[i]
+
+        # -------- PATTERN 1 --------
+        # DATE -> BALANCE -> AMOUNT -> DESCRIPTION
+        if is_date(line):
+
+            date = line
+            balance = lines[i+1]
+            amount = lines[i+2]
+
+            description_lines = []
+            j = i + 3
+
+            while j < len(lines) and not is_date(lines[j]) and not is_amount(lines[j]):
+                description_lines.append(lines[j])
+                j += 1
+
+            description = " ".join(description_lines)
+
+            balance_val = clean_amount(balance)
+            amount_val = clean_amount(amount)
+
+            tx = {}
+            tx["date"] = date
+            tx["description"] = description
+
+            if current_balance is not None and balance_val < current_balance:
+                tx["outgoing"] = amount
+                tx["incoming"] = "-"
+            else:
+                tx["outgoing"] = "-"
+                tx["incoming"] = amount
+
+            tx["balance"]=balance
+            transactions.append(tx)
+
+            current_balance = balance_val
+            i = j
+            continue
+
+
+        # -------- PATTERN 2 --------
+        # AMOUNT -> DESCRIPTION -> DATE -> BALANCE
+        if is_amount(line) and i+3 < len(lines) and is_date(lines[i+2]):
+
+            amount = line
+            description = lines[i+1]
+            date = lines[i+2]
+            balance = lines[i+3]
+
+            balance_val = clean_amount(balance)
+            amount_val = clean_amount(amount)
+
+            tx = {}
+            tx["date"] = date
+            tx["description"] = description
+
+            if current_balance is not None and balance_val < current_balance:
+                tx["outgoing"] = amount
+                tx["incoming"] = "-"
+            else:
+                tx["outgoing"] = "-"
+                tx["incoming"] = amount
+
+            tx["balance"]=balance
+            transactions.append(tx)
+
+            current_balance = balance_val
+            i += 4
+            continue
+
+        i += 1
+
+    return transactions,account_number,current_balance
+
+# print(extract_transaction_of_alfalah(filepath="output1.txt",extract_account=True))
+# extract_transaction_of_alfalah("output1.txt",1,4,extract_account=True)
