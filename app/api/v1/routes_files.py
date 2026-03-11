@@ -114,7 +114,7 @@ async def upload_file(background_tasks: BackgroundTasks,
                       conn = Depends(connect_to_db),
                       file:UploadFile = File(...),
                       password: str | None = Form(None),
-                      file_type: str = Form(...)
+                      file_type: str = Form(...),
                       bank_name: str = Form(...)
                       ): 
     file_info = {"filename": file.filename, "file_type":file_type}
