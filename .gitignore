@@ -2,8 +2,6 @@
 __pycache__/
 uploads/
 venv/
-.env
-.env.local
 .env.bak
 
 # ==================================
@@ -18,3 +16,5 @@ venv/
 *.bak
 *.tmp
 *.log
+config.bat
+node_modules
