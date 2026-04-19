@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.v1 import data_retrieval, routes_files, auth, reports_manager
+from app.api.v1 import data_retrieval, routes_files, auth, reports_manager, dashboards, banks
 from app.chatbot.router import router as chatbot_router
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +27,10 @@ app.include_router(data_retrieval.router)
 app.include_router(reports_manager.router)
 
 app.include_router(chatbot_router)
+
+app.include_router(dashboards.router)
+
+app.include_router(banks.router)
 
 
 @app.on_event("startup")

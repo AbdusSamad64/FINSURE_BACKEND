@@ -1,0 +1,122 @@
+# Apache Superset stack for FINSURE.
+#
+# Services:
+#   - superset-db      Postgres for Superset's internal metadata (separate from
+#                      FINSURE's Supabase Postgres, which is connected as a
+#                      data source from inside Superset).
+#   - superset-redis   Cache + async query results.
+#   - superset         The Superset web app (port 8088).
+#   - superset-init    One-shot init: db upgrade, admin user, embedded role, then exits.
+#
+# Start:   docker compose up -d
+# Stop:    docker compose down
+# Logs:    docker compose logs -f superset
+# URL:     http://localhost:8088
+
+services:
+  superset-db:
+    image: postgres:15-alpine
+    container_name: finsure-superset-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: supersetpass
+    volumes:
+      - superset_db_data:/var/lib/postgresql/data
+    networks:
+      - superset-net
+
+  superset-redis:
+    image: redis:7-alpine
+    container_name: finsure-superset-redis
+    restart: unless-stopped
+    volumes:
+      - superset_redis_data:/data
+    networks:
+      - superset-net
+
+  superset:
+    image: apache/superset:4.1.1
+    container_name: finsure-superset
+    restart: unless-stopped
+    depends_on:
+      - superset-db
+      - superset-redis
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_LOAD_EXAMPLES: "no"
+      # Database URL for Superset's own metadata store
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: superset
+      DATABASE_PASSWORD: supersetpass
+      DATABASE_HOST: superset-db
+      DATABASE_PORT: "5432"
+      DATABASE_DB: superset
+      # Redis
+      REDIS_HOST: superset-redis
+      REDIS_PORT: "6379"
+    volumes:
+      - ./superset_config.py:/app/pythonpath/superset_config.py
+      - ./pythonpath:/app/pythonpath_extra
+      - superset_home:/app/superset_home
+    command:
+      - /bin/sh
+      - -c
+      - |
+        pip install psycopg2-binary flask-cors &&
+        /usr/bin/run-server.sh
+    networks:
+      - superset-net
+
+  superset-init:
+    image: apache/superset:4.1.1
+    container_name: finsure-superset-init
+    depends_on:
+      - superset-db
+      - superset-redis
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_LOAD_EXAMPLES: "no"
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: superset
+      DATABASE_PASSWORD: supersetpass
+      DATABASE_HOST: superset-db
+      DATABASE_PORT: "5432"
+      DATABASE_DB: superset
+      REDIS_HOST: superset-redis
+      REDIS_PORT: "6379"
+      ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME}
+      ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+    volumes:
+      - ./superset_config.py:/app/pythonpath/superset_config.py
+      - ./pythonpath:/app/pythonpath_extra
+      - superset_home:/app/superset_home
+    command:
+      - /bin/sh
+      - -c
+      - |
+        pip install psycopg2-binary flask-cors &&
+        superset db upgrade &&
+        superset fab create-admin \
+            --username "$$ADMIN_USERNAME" \
+            --firstname Admin \
+            --lastname User \
+            --email "$$ADMIN_EMAIL" \
+            --password "$$ADMIN_PASSWORD" || true &&
+        superset init
+    networks:
+      - superset-net
+    restart: "no"
+
+networks:
+  superset-net:
+    driver: bridge
+
+volumes:
+  superset_db_data:
+  superset_redis_data:
+  superset_home:
