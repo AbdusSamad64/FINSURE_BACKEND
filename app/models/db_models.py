@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, CheckConstraint, func, Boolean
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
-from .database import Base
+from ..database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -51,6 +52,7 @@ class Category(Base):
     name = Column(String, nullable=False)
 
     transactions = relationship('Transaction', back_populates='category')
+    rules = relationship('TransactionRule', back_populates='category')
 
 
 class Transaction(Base):
@@ -67,7 +69,9 @@ class Transaction(Base):
     isTaxable = Column(Boolean)
     userID = Column(Integer, ForeignKey("users.userID"), nullable=False)
     accID = Column(Integer, ForeignKey("accounts.accID"), nullable=False)
-    categID = Column(Integer, ForeignKey("categories.categID"), nullable=False)
+    categID = Column(Integer, ForeignKey("categories.categID"), nullable=True)
+    categorized_by = Column(String, nullable=True) # rule, llm-gemini, llm-groq
+
 
     user = relationship('User', back_populates='transactions')
     account = relationship('Account', back_populates='transactions')
@@ -78,3 +82,14 @@ class Transaction(Base):
         CheckConstraint("LOWER(\"trxType\") IN ('debit', 'credit')", name="check_trx_type"),
     )
 
+
+class TransactionRule(Base):
+    __tablename__ = "transaction_rules"
+    
+    ruleID = Column(Integer, primary_key=True, index=True)
+    categID = Column(Integer, ForeignKey("categories.categID"), nullable=False)
+    keywords = Column(ARRAY(String), nullable=False)
+    tx_type = Column(String, nullable=True)  # Incoming, Outgoing, or None
+    exclude = Column(ARRAY(String), nullable=True)
+
+    category = relationship('Category', back_populates='rules')

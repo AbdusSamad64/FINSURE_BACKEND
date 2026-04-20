@@ -298,6 +298,9 @@ from hashlib import sha256
 from datetime import datetime
 import uuid
 import re
+from app.categorization.rule_engine import load_rules, apply_rules
+from app.database import SessionLocal
+
 
 
 router = APIRouter()
@@ -370,6 +373,14 @@ def save_transactions_to_db(transactions, account, user_id, file_info, conn):
         with conn.cursor() as cursor:
             cursor.execute("BEGIN;")
 
+            # ── Load categorization rules ──
+            db_session = SessionLocal()
+            try:
+                rules = load_rules(db_session)
+            finally:
+                db_session.close()
+
+
             # ── masked-aware account lookup ──
             try:
                 accID = get_account_id(cursor, account, user_id)
@@ -406,11 +417,17 @@ def save_transactions_to_db(transactions, account, user_id, file_info, conn):
                 if cursor.fetchone():
                     continue  # skip duplicate
 
+                # ── Apply categorization rules ──
+                # Map trxType (credit/debit) to Rule tx_type (Incoming/Outgoing)
+                normalized_tx_type = "Incoming" if trxType == "credit" else "Outgoing"
+                categID = apply_rules(trx.get("description"), normalized_tx_type, rules)
+                categorized_by = "rule" if categID else None
+
                 # Insert transaction
                 cursor.execute("""
                     INSERT INTO transactions
-                    ("trxNo", date, "trxDetail", amount, "trxType", "isTaxable", "userID", "accID", "categID", "trxHash")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    ("trxNo", date, "trxDetail", amount, "trxType", "isTaxable", "userID", "accID", "categID", "trxHash", "categorized_by")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                 """, (
                     trx.get("transaction_id") or None,
                     trx_datetime,
@@ -420,9 +437,11 @@ def save_transactions_to_db(transactions, account, user_id, file_info, conn):
                     None,
                     user_id,
                     accID,
-                    1,          # default category
-                    trx_hash
+                    categID,    # NULL if no rule matches
+                    trx_hash,
+                    categorized_by
                 ))
+
                 total_inserted += 1
 
             # Insert into file_uploads table
