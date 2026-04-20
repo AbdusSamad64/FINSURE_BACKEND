@@ -1,4 +1,15 @@
+import logging
+import sys
 from fastapi import FastAPI
+
+# Force logging to be visible in all environments
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
 from app.api.v1 import data_retrieval, routes_files, auth, reports_manager, dashboards, banks
 from app.chatbot.router import router as chatbot_router
 from fastapi.responses import JSONResponse
@@ -45,6 +56,15 @@ async def _warmup_chatbot() -> None:
         warmup()
     except Exception as exc:  # noqa: BLE001
         print(f"[chatbot] warmup skipped: {exc}")
+
+
+@app.on_event("startup")
+async def _start_categorization_worker():
+    """Start the background worker for LLM-based categorization."""
+    import asyncio
+    from app.categorization.worker import categorization_worker
+    asyncio.create_task(categorization_worker())
+
 
 
 @app.get("/", tags=["Root"])

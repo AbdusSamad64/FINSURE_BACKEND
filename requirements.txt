@@ -39,3 +39,8 @@ faiss-cpu==1.9.0
 sentence-transformers==3.3.1
 pypdf==5.1.0
 reportlab==4.4.10
+
+# Categorization pipeline (LLM fallback)
+google-generativeai==0.8.4
+groq>=0.28.0
+
