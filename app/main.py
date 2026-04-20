@@ -1,3 +1,4 @@
+import utils.session
 from fastapi import FastAPI
 from app.api.v1 import data_retrieval, routes_files, auth, reports_manager, dashboards, banks
 from app.chatbot.router import router as chatbot_router
