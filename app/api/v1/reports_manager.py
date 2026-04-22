@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
 from .auth import connect_to_db
 from app.utils.jwt_util import get_current_user
-from app.utils.report_logic import build_income_expense_report
+from app.utils.report_logic import (
+    build_income_expense_report,
+    build_cashflow_report,
+    build_category_breakdown_report,
+)
 from app.models.reports_models import ReportRequest
 
 router = APIRouter(prefix="/api/v1/reports", tags=["Reports"])
@@ -14,14 +18,14 @@ def generate_report(
     curr_user: dict = Depends(get_current_user),
     conn = Depends(connect_to_db)
 ):
-    # report title mapping 
-    if payload.reportType == "income_expense":
-        title = "Income vs Expense Report"
-    elif payload.reportType == "tax_summary":
-        title = "Tax Summary"
-    elif payload.reportType == "cashflow":
-        title = "Cashflow"
-    else:
+    # report title mapping
+    title_map = {
+        "income_expense": "Income vs Expense Report",
+        "cashflow": "Cash Flow Summary",
+        "category_breakdown": "Category Breakdown",
+    }
+    title = title_map.get(payload.reportType)
+    if not title:
         raise HTTPException(status_code=400, detail="Unsupported report type")
 
     try:
@@ -157,12 +161,12 @@ def get_report_details(
             raise HTTPException(status_code=404, detail="Report not found")
 
         # Dispatch based on report type
-        if report["report_type"] == "income_expense":
+        rtype = report["report_type"]
+        if rtype == "income_expense":
             return build_income_expense_report(report, curr_user["userID"], cursor)
-
-        #  Future reports
-        # elif report["report_type"] == "tax_summary":
-        #     return build_tax_summary_report(...)
-
+        elif rtype == "cashflow":
+            return build_cashflow_report(report, curr_user["userID"], cursor)
+        elif rtype == "category_breakdown":
+            return build_category_breakdown_report(report, curr_user["userID"], cursor)
         else:
             raise HTTPException(status_code=400, detail="Unsupported report type")

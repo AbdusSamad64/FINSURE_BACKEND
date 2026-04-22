@@ -14,17 +14,26 @@ def get_upload_history(
     conn = Depends(connect_to_db)
 ):
     with conn.cursor() as cursor:
-        # fetch required columns for current user
+        # Join through accounts → banks so we can show which bank each upload
+        # belongs to. LEFT JOINs keep orphaned rows visible rather than silently
+        # disappearing if an account row is ever missing.
         cursor.execute(
             """
-            SELECT filename, file_type, uploaded_at, total_transactions
-            FROM file_uploads
-            WHERE "userID" = %s
-            ORDER BY uploaded_at DESC;
+            SELECT
+                fu.filename,
+                fu.file_type,
+                fu.uploaded_at,
+                fu.total_transactions,
+                COALESCE(b.name, 'Unknown') AS bank
+            FROM file_uploads fu
+            LEFT JOIN accounts a ON a."accID" = fu."accID"
+            LEFT JOIN banks b    ON b."bankID" = a."bankID"
+            WHERE fu."userID" = %s
+            ORDER BY fu.uploaded_at DESC;
             """,
             (curr_user["userID"],)
         )
-        
+
         files = cursor.fetchall()  # fetch all matching rows
 
         # optionally, convert to list of dicts
@@ -33,6 +42,7 @@ def get_upload_history(
             result.append({
                 "fileName": f["filename"],
                 "fileType": f["file_type"],
+                "bank": f["bank"],
                 "uploadDate": f["uploaded_at"],
                 "transactionCount": f["total_transactions"],
                 "status": "completed"
@@ -94,28 +104,41 @@ def get_transactions_history(
     conn = Depends(connect_to_db)
 ):
     with conn.cursor() as cursor:
-        # fetch required columns for current user
+        # LEFT JOIN with categories so uncategorized rows still return a
+        # row — those fall back to "Uncategorized" on the client.
+        # trxType is kept separate from category so the UI can use it to
+        # color amounts (credit = green, debit = red) while `category`
+        # reflects the pipeline's output (Food, Rent, etc).
         cursor.execute(
             """
-            SELECT date, amount, "trxType", "trxDetail"
-            FROM transactions
-            WHERE "userID" = %s
-            ORDER BY date DESC;
+            SELECT
+                t.date,
+                t.amount,
+                t."trxType",
+                t."trxDetail",
+                t."isTaxable",
+                t.categorized_by,
+                COALESCE(c.name, 'Uncategorized') AS category
+            FROM transactions t
+            LEFT JOIN categories c ON c."categID" = t."categID"
+            WHERE t."userID" = %s
+            ORDER BY t.date DESC;
             """,
             (curr_user["userID"],)
         )
-        
-        files = cursor.fetchall()  # fetch all matching rows
 
-        # optionally, convert to list of dicts
+        rows = cursor.fetchall()
+
         result = []
-        for f in files:
+        for f in rows:
             result.append({
                 "date": f["date"],
                 "amount": f["amount"],
-                "category": f["trxType"],
+                "trxType": f["trxType"],          # credit / debit
+                "category": f["category"],        # from categorization pipeline
                 "description": f["trxDetail"],
-                "taxable": 'false',
+                "taxable": bool(f["isTaxable"]) if f["isTaxable"] is not None else False,
+                "categorizedBy": f["categorized_by"],  # 'rule' / 'llm-gemini' / 'llm-groq' / None
             })
 
-        return {"transactions": result}    
+        return {"transactions": result}
