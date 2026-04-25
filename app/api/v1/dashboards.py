@@ -27,8 +27,25 @@ from app.utils.jwt_util import get_current_user
 router = APIRouter(prefix="/api/v1/dashboards", tags=["Dashboards"])
 
 
-def _superset_url() -> str:
+def _superset_public_url() -> str:
+    """URL that the user's browser should load Superset from (iframe domain).
+
+    Local dev default is localhost because the Superset container is published
+    to the host on port 8088.
+    """
     return os.getenv("SUPERSET_URL", "http://localhost:8088").rstrip("/")
+
+
+def _superset_internal_url() -> str:
+    """URL the backend container should use to talk to Superset server-to-server.
+
+    When the backend runs in Docker, `localhost` points at the backend container
+    itself, not the Superset container. In that case set:
+        SUPERSET_INTERNAL_URL=http://superset:8088
+
+    If unset, we fall back to the public URL for non-Docker / single-host setups.
+    """
+    return os.getenv("SUPERSET_INTERNAL_URL", _superset_public_url()).rstrip("/")
 
 
 def _dashboard_uuid() -> str:
@@ -58,7 +75,7 @@ async def _get_superset_access_token(client: httpx.AsyncClient) -> str:
         )
 
     resp = await client.post(
-        f"{_superset_url()}/api/v1/security/login",
+        f"{_superset_internal_url()}/api/v1/security/login",
         json={
             "username": username,
             "password": password,
@@ -81,7 +98,7 @@ async def _get_superset_access_token(client: httpx.AsyncClient) -> str:
 async def _get_csrf_token(client: httpx.AsyncClient, access_token: str) -> str:
     """Fetch a CSRF token for use with the guest_token endpoint."""
     resp = await client.get(
-        f"{_superset_url()}/api/v1/security/csrf_token/",
+        f"{_superset_internal_url()}/api/v1/security/csrf_token/",
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=10.0,
     )
@@ -139,7 +156,7 @@ async def mint_guest_token(curr_user: dict = Depends(get_current_user)) -> dict:
             "hasData": False,
             "transactionCount": 0,
             "dashboardId": dashboard_uuid,
-            "supersetDomain": _superset_url(),
+            "supersetDomain": _superset_public_url(),
         }
 
     payload = {
@@ -162,12 +179,12 @@ async def mint_guest_token(curr_user: dict = Depends(get_current_user)) -> dict:
         csrf_token = await _get_csrf_token(client, access_token)
 
         resp = await client.post(
-            f"{_superset_url()}/api/v1/security/guest_token/",
+            f"{_superset_internal_url()}/api/v1/security/guest_token/",
             json=payload,
             headers={
                 "Authorization": f"Bearer {access_token}",
                 "X-CSRFToken": csrf_token,
-                "Referer": _superset_url(),
+                "Referer": _superset_internal_url(),
             },
             timeout=15.0,
         )
@@ -190,5 +207,5 @@ async def mint_guest_token(curr_user: dict = Depends(get_current_user)) -> dict:
         "transactionCount": txn_count,
         "token": token,
         "dashboardId": dashboard_uuid,
-        "supersetDomain": _superset_url(),
+        "supersetDomain": _superset_public_url(),
     }
