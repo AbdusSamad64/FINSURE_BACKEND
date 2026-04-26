@@ -1,0 +1,23 @@
+name: Deploy FINSURE Backend
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Droplet
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            cd /opt/finsure
+            git pull origin main
+            docker compose build backend
+            docker compose up -d --no-deps backend
+            docker system prune -f
+            echo "Deploy done ✓"
