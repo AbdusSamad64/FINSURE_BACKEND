@@ -1,6 +1,8 @@
 import logging
+import os
 import sys
 from fastapi import FastAPI
+from dotenv import load_dotenv
 
 # Force logging to be visible in all environments
 logging.basicConfig(
@@ -15,11 +17,20 @@ from app.chatbot.router import router as chatbot_router
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+load_dotenv()
+
+
+def _parse_allowed_origins() -> list[str]:
+    raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+    origins = [origin.strip().rstrip("/") for origin in raw_origins.split(",") if origin.strip()]
+    return origins or ["http://localhost:5173"]
+
+
 app = FastAPI(title="FINSURE - Financial Insights API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=_parse_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
