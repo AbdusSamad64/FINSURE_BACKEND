@@ -5,6 +5,43 @@ container. Superset auto-loads it at startup.
 """
 
 import os
+from pathlib import Path
+
+
+def _read_env_file_value(key: str, env_path: Path) -> str | None:
+    """Read a single key from the local .env file without extra dependencies."""
+    if not env_path.exists():
+        return None
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        current_key, value = line.split("=", 1)
+        if current_key.strip() != key:
+            continue
+        return value.strip().strip("\"'")
+
+    return None
+
+
+SUPERSET_DIR = Path(__file__).resolve().parent
+SUPERSET_ENV_PATH = SUPERSET_DIR / ".env"
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",   # Vite dev server (frontend)
+    "http://localhost:8000",   # FINSURE backend (for server-to-server)
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+]
+
+
+def _get_cors_origins() -> list[str]:
+    origins_value = _read_env_file_value("SUPERSET_CORS_ORIGINS", SUPERSET_ENV_PATH)
+    if not origins_value:
+        return DEFAULT_CORS_ORIGINS
+
+    origins = [origin.strip() for origin in origins_value.split(",") if origin.strip()]
+    return origins or DEFAULT_CORS_ORIGINS
 
 # ---------------------------------------------------------------------------
 # Core
@@ -65,12 +102,7 @@ CORS_OPTIONS = {
     "supports_credentials": True,
     "allow_headers": ["*"],
     "resources": ["*"],
-    "origins": [
-        "http://localhost:5173",   # Vite dev server (frontend)
-        "http://localhost:8000",   # FINSURE backend (for server-to-server)
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:8000",
-    ],
+    "origins": _get_cors_origins(),
 }
 
 # Allow iframe embedding on the frontend origin.
