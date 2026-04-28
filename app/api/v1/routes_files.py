@@ -289,8 +289,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from app.utils.file_helpers import detect_file_type, save_temp_file, delete_temp_file
-from app.services.extract_text import extract_pdf_with_ocr
-from app.services.extract_transactions import extract_transaction_of_easypaisa, extract_transaction_of_meezan, extract_transaction_of_ubl, extract_transaction_of_alfalah
 from app.utils.jwt_util import get_current_user
 from app.models.accounts_models import NewAccount
 from .auth import connect_to_db
@@ -300,6 +298,10 @@ import uuid
 import re
 from app.categorization.rule_engine import load_rules, apply_rules
 from app.database import SessionLocal
+from app.services.statement_processing import (
+    UnsupportedBankError,
+    extract_statement_transactions,
+)
 
 
 
@@ -477,77 +479,32 @@ async def upload_file(
     bank_name: str = Form("ubl")
 ):
     file_info = {"filename": file.filename, "file_type": file_type}
-    complete_transactions = []
     file_path = None
     total_no_pages = 0
     account_number = None
-    ubl_last_balance = None
-    alfalah_last_balance = None
     try:
         file_type = detect_file_type(file.content_type)
         file_type["filename"] = file.filename
         file_path = save_temp_file(file)
 
-        # --- Extract PDF text ---
         try:
-            text, total_no_pages = extract_pdf_with_ocr(file_path, password=password)
+            extracted = extract_statement_transactions(
+                str(file_path),
+                bank_name=bank_name,
+                password=password,
+            )
+            complete_transactions = extracted["raw_transactions"]
+            total_no_pages = extracted["total_pages"]
+            account_number = extracted["account_number"]
+        except UnsupportedBankError:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "UNSUPPORTED_BANK", "message": "Unsupported bank statement."}
+            )
         except ValueError as e:
             return JSONResponse(
                 status_code=401,
                 content={"status": "PASSWORD_REQUIRED", "message": str(e)}
-            )
-
-        if bank_name == "easypaisa":
-            for i in range(1, total_no_pages + 1):
-                raw_file_path = f'output{i}.txt'
-                transactions, acc_no = extract_transaction_of_easypaisa(
-                    filepath=raw_file_path, page_no=i,
-                    total_no_pages=total_no_pages, extract_account=(i == 1)
-                )
-                if acc_no:
-                    account_number = acc_no
-                complete_transactions += transactions
-
-        elif bank_name == "meezan":
-            print("meezan bank detected")
-            for i in range(2, total_no_pages + 1):
-                raw_file_path = f'output{i}.txt'
-                transactions, acc_no = extract_transaction_of_meezan(
-                    filepath=raw_file_path, page_no=i,
-                    total_no_pages=total_no_pages, extract_account=(i == 2)
-                )
-                if acc_no:
-                    account_number = acc_no
-                complete_transactions += transactions
-
-        elif bank_name == "ubl":
-            for i in range(1, total_no_pages + 1):
-                raw_file_path = f'output{i}.txt'
-                transactions, acc_no, ubl_last_balance = extract_transaction_of_ubl(
-                    filepath=raw_file_path, page_no=i,
-                    total_no_pages=total_no_pages, extract_account=(i == 1),
-                    previous_balance=ubl_last_balance
-                )
-                if acc_no:
-                    account_number = acc_no
-                complete_transactions += transactions
-
-        elif bank_name == "alfalah":
-            for i in range(1, total_no_pages + 1):
-                raw_file_path = f'output{i}.txt'
-                transactions, acc_no, alfalah_last_balance = extract_transaction_of_alfalah(
-                    filepath=raw_file_path, page_no=i,
-                    total_no_pages=total_no_pages, extract_account=(i == 1),
-                    previous_balance=alfalah_last_balance
-                )
-                if acc_no:
-                    account_number = acc_no
-                complete_transactions += transactions
-
-        else:
-            return JSONResponse(
-                status_code=400,
-                content={"status": "UNSUPPORTED_BANK", "message": "Unsupported bank statement."}
             )
 
         print(complete_transactions)
