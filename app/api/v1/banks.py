@@ -25,7 +25,7 @@ _MOBILE_WALLET_SLUGS = {"easypaisa"}
 
 # Banks whose statement PDFs are password-protected and therefore require the
 # user to enter a password before we can parse them.
-_PASSWORD_PROTECTED_SLUGS = {"meezan"}
+_PASSWORD_PROTECTED_SLUGS = {"meezan", "alfalah"}
 
 
 @router.get("")
