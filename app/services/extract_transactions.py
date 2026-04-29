@@ -321,7 +321,7 @@ def extract_transaction_of_meezan(filepath, page_no, total_no_pages, extract_acc
                 break
 
     # -------- FIND TRANSACTION START --------
-        start_index = None
+    start_index = None
 
     # 1st priority: Opening Balance
     for i, line in enumerate(lines):
