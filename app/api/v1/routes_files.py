@@ -516,7 +516,8 @@ async def upload_file(
             except ValueError:
                 raise HTTPException(
                     status_code=403,
-                    detail="Account not found or not associated with user"
+                    # detail="Account not found or not associated with user"
+                    detail="This statement does not match any account registered under your profile."
                 )
 
         background_tasks.add_task(
