@@ -12,6 +12,7 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+TOTP_PENDING_TOKEN_EXPIRE_MINUTES = int(os.getenv("TOTP_PENDING_TOKEN_EXPIRE_MINUTES", 5))
 
 # create jwt token
 
@@ -19,14 +20,39 @@ def create_access_token(data: dict, expires_delta: int = ACCESS_TOKEN_EXPIRE_MIN
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=expires_delta)
     to_encode.update({"exp": expire})
+    to_encode.setdefault("token_type", "access")
     encoded = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded
+
+
+def create_pending_2fa_token(user_id: int, expires_delta: int = TOTP_PENDING_TOKEN_EXPIRE_MINUTES) -> str:
+    return create_access_token(
+        {"user_id": user_id, "token_type": "2fa_pending"},
+        expires_delta=expires_delta,
+    )
 
 # verify token
 
 def verify_access_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("token_type") == "2fa_pending":
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def verify_pending_2fa_token(token: str) -> int:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("token_type") != "2fa_pending":
+            raise HTTPException(status_code=401, detail="Invalid token")
         user_id = payload.get("user_id")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -62,3 +88,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_
         raise HTTPException(status_code=404, detail="User not found")
 
     return user
+
+
+def get_pending_2fa_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    token = credentials.credentials
+    user_id = verify_pending_2fa_token(token)
+    return user_id

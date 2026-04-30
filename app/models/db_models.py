@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, CheckConstraint, func, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, CheckConstraint, func, Boolean, BigInteger, LargeBinary, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 from ..database import Base
@@ -13,9 +13,14 @@ class User(Base):
     # usertype can be either freelancer or businessman (case insensitive)
     userType = Column(String, nullable=False)
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    totp_enabled = Column(Boolean, nullable=False, server_default=func.false())
+    totp_secret = Column(LargeBinary, nullable=True)
+    totp_verified_at = Column(DateTime(timezone=True), nullable=True)
+    totp_last_used_timecode = Column(BigInteger, nullable=True)
 
     accounts = relationship('Account', back_populates='user')
     transactions = relationship('Transaction', back_populates='user')
+    backup_codes = relationship('UserBackupCode', back_populates='user', cascade='all, delete-orphan')
 
     __table_args__ = (
         CheckConstraint("LOWER(\"userType\") IN ('freelancer', 'businessman')", name="check_user_type"),
@@ -93,3 +98,25 @@ class TransactionRule(Base):
     exclude = Column(ARRAY(String), nullable=True)
 
     category = relationship('Category', back_populates='rules')
+
+
+class UserBackupCode(Base):
+    __tablename__ = "user_backup_codes"
+
+    backup_code_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.userID", ondelete="CASCADE"), nullable=False)
+    code_hash = Column(Text, nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship('User', back_populates='backup_codes')
+
+
+class AuthRateLimit(Base):
+    __tablename__ = "auth_rate_limits"
+
+    rate_limit_key = Column(Text, primary_key=True)
+    window_start = Column(DateTime(timezone=True), nullable=False)
+    attempts = Column(Integer, nullable=False, server_default="0")
+    blocked_until = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

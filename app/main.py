@@ -12,7 +12,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from app.api.v1 import data_retrieval, routes_files, auth, reports_manager, dashboards, banks, demo
+from app.api.v1 import data_retrieval, routes_files, auth, reports_manager, dashboards, banks, demo, two_factor
 from app.chatbot.router import router as chatbot_router
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,6 +43,7 @@ app.include_router(
     tags=["File Uploads"]             # optional, Swagger docs ke liye
 )
 app.include_router(auth.router)
+app.include_router(two_factor.router)
 
 app.include_router(data_retrieval.router)
 
