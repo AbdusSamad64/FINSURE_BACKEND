@@ -61,7 +61,10 @@ def extract_pdf_with_ocr(file_path, password=None):
 # extract_pdf_with_ocr("D:/Abdullah/FYDP/Bank_Statements/noorapi_meezan.pdf","0256")
 # extract_pdf_with_ocr("D:/Abdullah/FYDP/Bank_Statements/ramsha_jan_ubl.pdf")
 
-# extract_pdf_with_ocr("C:/Users/PMLS/Downloads/saad_half_alfalah.pdf","136")
+# extract_pdf_with_ocr("C:/Users/PMLS/Downloads/hussain_meezan_5857.pdf","5857")
+# extract_pdf_with_ocr("D:/Abdullah/FYDP/Bank_Statements/samad_meezan.pdf","5074")
+# extract_pdf_with_ocr("D:/Abdullah/FYDP/Bank_Statements/saad_dec_alfalah.pdf","136")
 
 
 
+# "C:\Users\PMLS\Downloads\hussain_meezan_5857.pdf"
