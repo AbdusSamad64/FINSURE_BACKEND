@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.db.database import get_db_connection
 from app.models.user_models import UserSignup, UserLogin, UserEdit, ChangePassword
 from app.utils.hash_util import hash_password, verify_password
-from app.utils.jwt_util import create_access_token, get_current_user
+from app.utils.jwt_util import create_access_token, create_pending_2fa_token, get_current_user
 from fastapi import Depends
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
@@ -67,12 +67,22 @@ def login_user(user: UserLogin, conn=Depends(connect_to_db)):
     if not verify_password(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    if db_user.get("totp_enabled"):
+        pending_token = create_pending_2fa_token(db_user["userID"])
+        return {
+            "message": "Two-factor authentication required",
+            "requires_2fa": True,
+            "two_factor_token": pending_token,
+            "token_type": "2fa_pending",
+        }
+
     token = create_access_token({"user_id": db_user["userID"]})
 
     return {
         "message": "Login successful!",
         "access_token": token,
         "token_type": "bearer",
+        "requires_2fa": False,
         "user": {
             "userID": db_user["userID"],
             "name": db_user["name"],

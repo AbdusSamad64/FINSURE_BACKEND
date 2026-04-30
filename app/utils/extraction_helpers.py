@@ -25,8 +25,15 @@ def is_int_convertible(value):
 def is_date(line):
     return re.match(r"\d{2}\s[A-Za-z]{3}\s\d{4}", line)
 
+# def is_amount(line):
+#     return re.match(r"^\d{1,3}(,\d{3})*\.\d{2}$", line.strip())
+
+
 def is_amount(line):
-    return re.match(r"^\d{1,3}(,\d{3})*\.\d{2}$", line.strip())
+    return re.match(r"^-?\d{1,3}(,\d{3})*\.\d{2}$", line.strip()) is not None
 
 def clean_amount(x):
     return float(x.replace(",", ""))
+
+def is_date_of_meezan(line):
+    return re.fullmatch(r"\d{2}[-\s][A-Za-z]{3}[-\s]\d{4}", line) is not None
